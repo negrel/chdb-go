@@ -98,11 +98,6 @@ type connection struct {
 	conn **chdb_conn
 }
 
-// CancelQuery implements ChdbConn.
-func (c *connection) CancelQuery(query ChdbResult) (err error) {
-	panic("unimplemented")
-}
-
 func newChdbConn(conn **chdb_conn) ChdbConn {
 	c := &connection{
 		conn: conn,
