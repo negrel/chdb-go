@@ -54,6 +54,7 @@ func (d DriverType) PrepareRows(result chdbpurego.ChdbResult, buf []byte, bufSiz
 			localResult: result, reader: reader,
 			bufferSize: bufSize, needNewBuffer: true,
 			useUnsafeStringReader: useUnsafe,
+			schemaFields:          reader.Schema().Fields(),
 		}, nil
 
 	}
@@ -73,6 +74,7 @@ func (d DriverType) PrepareStreamingRows(result chdbpurego.ChdbStreamResult, buf
 			stream: result, curChunk: nextRes, reader: reader,
 			bufferSize: bufSize, needNewBuffer: true,
 			useUnsafeStringReader: useUnsafe,
+			schemaFields:          reader.Schema().Fields(),
 		}, nil
 
 	}

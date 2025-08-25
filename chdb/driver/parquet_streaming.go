@@ -18,17 +18,17 @@ type parquetStreamingRows struct {
 	curChunk              chdbpurego.ChdbResult       // current chunk
 	reader                *parquet.GenericReader[any] // parquet reader
 	curRecord             parquet.Row
-	buffer                []parquet.Row // record buffer
-	bufferSize            int           // amount of records to preload into buffer
-	bufferIndex           int64         // index in the current buffer
-	curRow                int64         // row counter
+	buffer                []parquet.Row   // record buffer
+	schemaFields          []parquet.Field // schema fields
+	bufferSize            int             // amount of records to preload into buffer
+	bufferIndex           int64           // index in the current buffer
+	curRow                int64           // row counter
 	needNewBuffer         bool
 	useUnsafeStringReader bool
 }
 
 func (r *parquetStreamingRows) Columns() (out []string) {
-	sch := r.reader.Schema()
-	for _, f := range sch.Fields() {
+	for _, f := range r.schemaFields {
 		out = append(out, f.Name())
 	}
 
@@ -45,6 +45,7 @@ func (r *parquetStreamingRows) Close() error {
 	r.stream.Free()
 	r.curChunk = nil
 	r.stream = nil
+	r.schemaFields = nil
 
 	r.buffer = nil
 	return nil
@@ -85,6 +86,7 @@ func (r *parquetStreamingRows) readNextChunkFromStream() error {
 		return io.EOF
 	}
 	r.reader = parquet.NewGenericReader[any](bytes.NewReader(r.curChunk.Buf()))
+	r.schemaFields = r.reader.Schema().Fields()
 	return nil
 }
 
@@ -182,11 +184,11 @@ func (r *parquetStreamingRows) Next(dest []driver.Value) error {
 }
 
 func (r *parquetStreamingRows) ColumnTypeDatabaseTypeName(index int) string {
-	return r.reader.Schema().Fields()[index].Type().String()
+	return r.schemaFields[index].Type().String()
 }
 
 func (r *parquetStreamingRows) ColumnTypeNullable(index int) (nullable, ok bool) {
-	return r.reader.Schema().Fields()[index].Optional(), true
+	return r.schemaFields[index].Optional(), true
 }
 
 func (r *parquetStreamingRows) ColumnTypePrecisionScale(index int) (precision, scale int64, ok bool) {
@@ -194,7 +196,7 @@ func (r *parquetStreamingRows) ColumnTypePrecisionScale(index int) (precision, s
 }
 
 func (r *parquetStreamingRows) ColumnTypeScanType(index int) reflect.Type {
-	switch r.reader.Schema().Fields()[index].Type().Kind() {
+	switch r.schemaFields[index].Type().Kind() {
 	case parquet.Boolean:
 		return reflect.TypeOf(false)
 	case parquet.Int32:
