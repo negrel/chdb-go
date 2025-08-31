@@ -114,7 +114,7 @@ func newChdbConn(conn *chdb_connection) ChdbConn {
 // Close implements ChdbConn.
 func (c *connection) Close() {
 	if c.conn != nil {
-		chdbCloseConn(c.conn.internal_data)
+		chdbCloseConn(c.conn)
 	}
 }
 

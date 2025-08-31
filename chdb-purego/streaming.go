@@ -37,7 +37,7 @@ func (c *streamingResult) Error() error {
 // Free implements ChdbStreamResult.
 func (c *streamingResult) Free() {
 	if c.curConn != nil && c.stream != nil {
-		//chdbStreamCancelQuery(c.curConn.internal_data, c.stream)
+		chdbStreamCancelQuery(c.curConn, c.stream)
 		chdbDestroyQueryResult(c.stream)
 	}
 
