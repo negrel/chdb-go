@@ -75,6 +75,8 @@ func (r *parquetStreamingRows) readNextChunkFromStream() error {
 	if err := r.reader.Close(); err != nil {
 		return err
 	}
+	// free the previous chunk
+	r.curChunk.Free()
 	r.curChunk = r.stream.GetNext()
 	if r.curChunk == nil {
 		return io.EOF
