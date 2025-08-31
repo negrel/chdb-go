@@ -29,7 +29,7 @@ func newStreamingResult(conn *chdb_connection, cRes *chdb_result) ChdbStreamResu
 // Error implements ChdbStreamResult.
 func (c *streamingResult) Error() error {
 	if s := chdbResultError(c.stream); s != "" {
-		return errors.New("test")
+		return errors.New(s)
 	}
 	return nil
 }

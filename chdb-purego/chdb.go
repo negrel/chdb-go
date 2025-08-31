@@ -59,7 +59,7 @@ func (c *result) Elapsed() float64 {
 func (c *result) Error() error {
 	if c.chdb_result != nil {
 		if s := chdbResultError(c.chdb_result); s != "" {
-			return errors.New("test")
+			return errors.New(s)
 		}
 	}
 	return nil
@@ -133,7 +133,7 @@ func (c *connection) Query(queryStr string, formatStr string) (result ChdbResult
 	}
 	errMsg := chdbResultError(res)
 	if errMsg != "" {
-		return nil, errors.New("test")
+		return nil, errors.New(errMsg)
 	}
 
 	return newChdbResult(res), nil
