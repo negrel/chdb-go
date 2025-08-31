@@ -41,6 +41,7 @@ func TestDbWithParquetStreaming(t *testing.T) {
 		}
 
 	}
+
 }
 
 func TestDBWithParquetStreamingSession(t *testing.T) {

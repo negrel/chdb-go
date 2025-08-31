@@ -28,6 +28,7 @@ type parquetRows struct {
 	reader                *parquet.GenericReader[any] // parquet reader
 	curRecord             parquet.Row                 // TODO: delete this?
 	buffer                []parquet.Row               // record buffer
+	schemaFields          []parquet.Field             // schema fields
 	bufferSize            int                         // amount of records to preload into buffer
 	bufferIndex           int64                       // index in the current buffer
 	curRow                int64                       // row counter
@@ -36,8 +37,7 @@ type parquetRows struct {
 }
 
 func (r *parquetRows) Columns() (out []string) {
-	sch := r.reader.Schema()
-	for _, f := range sch.Fields() {
+	for _, f := range r.schemaFields {
 		out = append(out, f.Name())
 	}
 
@@ -53,7 +53,7 @@ func (r *parquetRows) Close() error {
 	r.reader = nil
 	r.localResult.Free()
 	r.localResult = nil
-
+	r.schemaFields = nil
 	r.buffer = nil
 	return nil
 }
@@ -90,7 +90,7 @@ func (r *parquetRows) Next(dest []driver.Value) error {
 
 	}
 	r.curRecord = r.buffer[r.bufferIndex]
-	if r.curRecord == nil || len(r.curRecord) == 0 {
+	if len(r.curRecord) == 0 {
 		return fmt.Errorf("empty row")
 	}
 	var scanError error
@@ -166,11 +166,11 @@ func (r *parquetRows) Next(dest []driver.Value) error {
 }
 
 func (r *parquetRows) ColumnTypeDatabaseTypeName(index int) string {
-	return r.reader.Schema().Fields()[index].Type().String()
+	return r.schemaFields[index].Type().String()
 }
 
 func (r *parquetRows) ColumnTypeNullable(index int) (nullable, ok bool) {
-	return r.reader.Schema().Fields()[index].Optional(), true
+	return r.schemaFields[index].Optional(), true
 }
 
 func (r *parquetRows) ColumnTypePrecisionScale(index int) (precision, scale int64, ok bool) {
@@ -178,7 +178,7 @@ func (r *parquetRows) ColumnTypePrecisionScale(index int) (precision, scale int6
 }
 
 func (r *parquetRows) ColumnTypeScanType(index int) reflect.Type {
-	switch r.reader.Schema().Fields()[index].Type().Kind() {
+	switch r.schemaFields[index].Type().Kind() {
 	case parquet.Boolean:
 		return reflect.TypeOf(false)
 	case parquet.Int32:

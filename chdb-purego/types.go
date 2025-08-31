@@ -36,6 +36,14 @@ type chdb_conn struct {
 	queue     unsafe.Pointer
 }
 
+type chdb_connection struct {
+	internal_data unsafe.Pointer
+}
+
+type chdb_result struct {
+	internal_data unsafe.Pointer
+}
+
 type ChdbResult interface {
 	Buf() []byte
 	// String rapresentation of the the buffer

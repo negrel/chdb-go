@@ -12,12 +12,12 @@ import (
 )
 
 type result struct {
-	localResv2 *local_result_v2
+	chdb_result *chdb_result
 }
 
-func newChdbResult(cRes *local_result_v2) ChdbResult {
+func newChdbResult(cRes *chdb_result) ChdbResult {
 	res := &result{
-		localResv2: cRes,
+		chdb_result: cRes,
 	}
 	// runtime.SetFinalizer(res, res.Free)
 	return res
@@ -26,35 +26,40 @@ func newChdbResult(cRes *local_result_v2) ChdbResult {
 
 // Buf implements ChdbResult.
 func (c *result) Buf() []byte {
-	if c.localResv2 != nil {
-		if c.localResv2.buf != nil && c.localResv2.len > 0 {
-			return unsafe.Slice(c.localResv2.buf, c.localResv2.len)
+	if c.chdb_result != nil {
+		buf := chdbResultBuffer(c.chdb_result)
+		if buf != nil {
+			// Assuming we have a way to get the length of the buffer
+			// Thlis is a placeholder; replace with actual length retrieva logic
+			length := c.Len() // Replace with actual length
+			return unsafe.Slice(buf, length)
 		}
+
 	}
 	return nil
 }
 
 // BytesRead implements ChdbResult.
 func (c *result) BytesRead() uint64 {
-	if c.localResv2 != nil {
-		return c.localResv2.bytes_read
+	if c.chdb_result != nil {
+		return chdbResultBytesRead(c.chdb_result)
 	}
 	return 0
 }
 
 // Elapsed implements ChdbResult.
 func (c *result) Elapsed() float64 {
-	if c.localResv2 != nil {
-		return c.localResv2.elapsed
+	if c.chdb_result != nil {
+		return chdbResultElapsed(c.chdb_result)
 	}
 	return 0
 }
 
 // Error implements ChdbResult.
 func (c *result) Error() error {
-	if c.localResv2 != nil {
-		if c.localResv2.error_message != nil {
-			return errors.New(ptrToGoString(c.localResv2.error_message))
+	if c.chdb_result != nil {
+		if s := chdbResultError(c.chdb_result); s != "" {
+			return errors.New(s)
 		}
 	}
 	return nil
@@ -62,25 +67,25 @@ func (c *result) Error() error {
 
 // Free implements ChdbResult.
 func (c *result) Free() {
-	if c.localResv2 != nil {
-		freeResultV2(c.localResv2)
-		c.localResv2 = nil
+	if c.chdb_result != nil {
+		chdbDestroyQueryResult(c.chdb_result)
+		c.chdb_result = nil
 	}
 
 }
 
 // Len implements ChdbResult.
 func (c *result) Len() int {
-	if c.localResv2 != nil {
-		return int(c.localResv2.len)
+	if c.chdb_result != nil {
+		return int(chdbResultLen(c.chdb_result))
 	}
 	return 0
 }
 
 // RowsRead implements ChdbResult.
 func (c *result) RowsRead() uint64 {
-	if c.localResv2 != nil {
-		return c.localResv2.rows_read
+	if c.chdb_result != nil {
+		return chdbResultRowsRead(c.chdb_result)
 	}
 	return 0
 }
@@ -95,15 +100,10 @@ func (c *result) String() string {
 }
 
 type connection struct {
-	conn **chdb_conn
+	conn *chdb_connection
 }
 
-// CancelQuery implements ChdbConn.
-func (c *connection) CancelQuery(query ChdbResult) (err error) {
-	panic("unimplemented")
-}
-
-func newChdbConn(conn **chdb_conn) ChdbConn {
+func newChdbConn(conn *chdb_connection) ChdbConn {
 	c := &connection{
 		conn: conn,
 	}
@@ -114,28 +114,26 @@ func newChdbConn(conn **chdb_conn) ChdbConn {
 // Close implements ChdbConn.
 func (c *connection) Close() {
 	if c.conn != nil {
-		closeConn(c.conn)
+		chdbCloseConn(c.conn)
 	}
 }
 
 // Query implements ChdbConn.
 func (c *connection) Query(queryStr string, formatStr string) (result ChdbResult, err error) {
-
 	if c.conn == nil {
 		return nil, fmt.Errorf("invalid connection")
 	}
 
-	rawConn := *c.conn
-
-	res := queryConn(rawConn, queryStr, formatStr)
+	res := chdbQuery(c.conn.internal_data, queryStr, formatStr)
 	if res == nil {
 		// According to the C ABI of chDB v1.2.0, the C function query_stable_v2
 		// returns nil if the query returns no data. This is not an error. We
 		// will change this behavior in the future.
 		return newChdbResult(res), nil
 	}
-	if res.error_message != nil {
-		return nil, errors.New(ptrToGoString(res.error_message))
+	errMsg := chdbResultError(res)
+	if errMsg != "" {
+		return nil, errors.New(errMsg)
 	}
 
 	return newChdbResult(res), nil
@@ -148,28 +146,23 @@ func (c *connection) QueryStreaming(queryStr string, formatStr string) (result C
 		return nil, fmt.Errorf("invalid connection")
 	}
 
-	rawConn := *c.conn
-
-	res := queryConnStreaming(rawConn, queryStr, formatStr)
+	res := chdbStreamQuery(c.conn.internal_data, queryStr, formatStr)
 	if res == nil {
 		// According to the C ABI of chDB v1.2.0, the C function query_stable_v2
 		// returns nil if the query returns no data. This is not an error. We
 		// will change this behavior in the future.
-		return newStreamingResult(rawConn, res), nil
+		return newStreamingResult(c.conn, res), nil
 	}
-	if s := streamingResultError(res); s != nil {
-		return nil, errors.New(*s)
+	if s := chdbResultError(res); s != "" {
+		return nil, errors.New(s)
 	}
 
-	return newStreamingResult(rawConn, res), nil
+	return newStreamingResult(c.conn, res), nil
 }
 
 func (c *connection) Ready() bool {
 	if c.conn != nil {
-		deref := *c.conn
-		if deref != nil {
-			return deref.connected
-		}
+		return true
 	}
 	return false
 }
@@ -221,7 +214,7 @@ func NewConnection(argc int, argv []string) (ChdbConn, error) {
 	// 	fmt.Println("arg: ", arg)
 	// }
 
-	var conn **chdb_conn
+	var conn *chdb_connection
 	var err error
 	func() {
 		defer func() {
@@ -229,7 +222,7 @@ func NewConnection(argc int, argv []string) (ChdbConn, error) {
 				err = fmt.Errorf("C++ exception: %v", r)
 			}
 		}()
-		conn = connectChdb(len(new_argv), c_argv)
+		conn = chdbConnect(len(new_argv), c_argv)
 	}()
 
 	if err != nil {

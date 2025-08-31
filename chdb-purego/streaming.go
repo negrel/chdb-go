@@ -3,12 +3,12 @@ package chdbpurego
 import "errors"
 
 type streamingResult struct {
-	curConn  *chdb_conn
-	stream   *chdb_streaming_result
+	curConn  *chdb_connection
+	stream   *chdb_result
 	curChunk ChdbResult
 }
 
-func newStreamingResult(conn *chdb_conn, cRes *chdb_streaming_result) ChdbStreamResult {
+func newStreamingResult(conn *chdb_connection, cRes *chdb_result) ChdbStreamResult {
 
 	// nextChunk := streamingResultNext(conn, cRes)
 	// if nextChunk == nil {
@@ -28,16 +28,19 @@ func newStreamingResult(conn *chdb_conn, cRes *chdb_streaming_result) ChdbStream
 
 // Error implements ChdbStreamResult.
 func (c *streamingResult) Error() error {
-	if s := streamingResultError(c.stream); s != nil {
-		return errors.New(*s)
+	if s := chdbResultError(c.stream); s != "" {
+		return errors.New(s)
 	}
 	return nil
 }
 
 // Free implements ChdbStreamResult.
 func (c *streamingResult) Free() {
-	streamingResultCancel(c.curConn, c.stream)
-	streamingResultDestroy(c.stream)
+	if c.curConn != nil && c.stream != nil {
+		chdbStreamCancelQuery(c.curConn, c.stream)
+		chdbDestroyQueryResult(c.stream)
+	}
+
 	c.stream = nil
 	if c.curChunk != nil {
 		c.curChunk.Free()
@@ -53,7 +56,7 @@ func (c *streamingResult) Cancel() {
 // GetNext implements ChdbStreamResult.
 func (c *streamingResult) GetNext() ChdbResult {
 	if c.curChunk == nil {
-		nextChunk := streamingResultNext(c.curConn, c.stream)
+		nextChunk := chdbStreamFetchResult(c.curConn.internal_data, c.stream)
 		if nextChunk == nil {
 			return nil
 		}
@@ -63,7 +66,7 @@ func (c *streamingResult) GetNext() ChdbResult {
 	// free the current chunk before getting the next one
 	c.curChunk.Free()
 	c.curChunk = nil
-	nextChunk := streamingResultNext(c.curConn, c.stream)
+	nextChunk := chdbStreamFetchResult(c.curConn.internal_data, c.stream)
 	if nextChunk == nil {
 		return nil
 	}
